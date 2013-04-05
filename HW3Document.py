@@ -1,4 +1,6 @@
+import HW3Index as Index
 import re
+import math
 
 class Document:
    numOfDocsCreated = 0
@@ -13,6 +15,8 @@ class Document:
       self.queryCode    = queryCode      
       self.tfidfVector  = {}
       self.tfidfLength  = -1
+      self.cluster      = False
+      self.tempCluster  = False
    
    def __hash__(self):
       return hash(self.title)
@@ -23,8 +27,8 @@ class Document:
    def getTFIDF(self, word):
       #TODO: Remove the calls to lower() for all methods in this class?
       word = word.lower()
-      indexEntry = self.tfidfVector.get(word, IndexEntry())
-      indexEntry.getTFIDF()
+      indexEntry = self.tfidfVector.get(word, Index.IndexEntry())
+      return indexEntry.getTFIDF()
    
    def joinToIndex(self, word, indexEntry):
       word = word.lower()
@@ -36,6 +40,9 @@ class Document:
       bagOfWords = array1 + array2
       return bagOfWords
    
+   def getSetOfWords(self):
+      return set(self.tfidfVector.keys())
+      
    def computeTFIDFLength(self):
       self.tfidfLength  = 0
       for word in self.tfidfVector:
@@ -75,7 +82,7 @@ class Document:
          print "URL = " + self.url
          print "Source = " + self.source
          print "Description = " + self.description
-         print "queryCode = " + self.queryCode
+         print "queryCode = " + str(self.queryCode)
       else:
          if keys.get("title", 0):
             print "Title = " + self.title
@@ -87,3 +94,20 @@ class Document:
             print "Description = " + self.description
          if keys.get("queryCode", 0):
             print "queryCode = " + self.queryCode
+   
+   def computeCentroidOf(self, setOfDocs):
+      if not setOfDocs:
+         print "Empty cluster found"
+      numDocs = len(setOfDocs)
+      #TODO: Take care of case when numDocs == 0
+      setOfWords = set()
+      for doc in setOfDocs:
+         setOfWords |= doc.getSetOfWords()
+      self.tfidfVector = {}
+      for word in setOfWords:
+         indexEntry = Index.IndexEntry()
+         indexEntry.tfidf = 0.0
+         for doc in setOfDocs:
+            indexEntry.tfidf += doc.getTFIDF(word)
+         indexEntry.tfidf /= float(numDocs)
+         self.tfidfVector[word] = indexEntry

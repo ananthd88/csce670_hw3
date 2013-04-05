@@ -4,6 +4,7 @@ import json
 import requests
 import re
 import os.path
+import gc
 
 def processAPIQueries(collection, queryCode, numResults):
    query = collection.queries[queryCode]
@@ -71,6 +72,7 @@ def processAPIQueries(collection, queryCode, numResults):
    return numRequestsMade
    
 def main(): 
+   gc.enable()
    collection = Collection.Collection()
    collection.queries = ["texas aggies",
                          "texas longhorns",
@@ -83,7 +85,22 @@ def main():
       print str(numRequestsMade) + " requests to the Bing API were made."
       collection.hashTable = {}
       count += 1
-   collection.printCollection()
+   #collection.printCollection()
+   collection.computeAllTFIDF()
+   print
+   print
+   purityArray = []
+   for k in range(2, 16):
+      bestPurity = 0.0
+      for i in range(0, 10):
+         collection.kMeansCluster(k)
+         if bestPurity < collection.purity:
+            bestPurity = collection.purity
+      purityArray.append(bestPurity)
    
+   k = 2
+   for purity in purityArray:
+      print "Best %d-clustering purity = %f" % (k, purity)
+      k += 1
 if __name__ == '__main__':
     main()
