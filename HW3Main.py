@@ -1,12 +1,12 @@
-import HW3Record as Record
-import HW3Table as Table
+import HW3Document as Document
+import HW3Collection as Collection
 import json
 import requests
 import re
 import os.path
 
-def processAPIQueries(table, queryCode, numResults):
-   query = table.queries[queryCode]
+def processAPIQueries(collection, queryCode, numResults):
+   query = collection.queries[queryCode]
    subqueries = re.split('\W+', query)
    newQuery = "%20".join(subqueries)
    
@@ -51,15 +51,15 @@ def processAPIQueries(table, queryCode, numResults):
       
       data = json.loads(line)
       
-      for jsonRecord in data["d"]["results"]:
-         newRecord = Record.Record(jsonRecord, queryCode)
-         success = table.addRecord(newRecord)
+      for jsonDocument in data["d"]["results"]:
+         newDocument = Document.Document(jsonDocument, queryCode)
+         success = collection.addDocument(newDocument)
          if success:
             uniqueCount += 1
             if uniqueCount == numResults:
                break
       
-      print "Added %s records to the table" % (uniqueCount)
+      print "Added %s documents to the collection" % (uniqueCount)
       
       # Write the results to a json file on disk for posterity
       if not readFromFile:
@@ -71,19 +71,19 @@ def processAPIQueries(table, queryCode, numResults):
    return numRequestsMade
    
 def main(): 
-   table = Table.Table()
-   table.queries = ["texas aggies",
-                    "texas longhorns",
-                    "duke blue devils",
-                    "dallas cowboys",
-                    "dallas mavericks"]
+   collection = Collection.Collection()
+   collection.queries = ["texas aggies",
+                         "texas longhorns",
+                         "duke blue devils",
+                         "dallas cowboys",
+                         "dallas mavericks"]
    count = 0
-   for query in table.queries:
-      numRequestsMade = processAPIQueries(table, count, 30)
+   for query in collection.queries:
+      numRequestsMade = processAPIQueries(collection, count, 30)
       print str(numRequestsMade) + " requests to the Bing API were made."
-      table.hashTable = {}
+      collection.hashTable = {}
       count += 1
-   table.printTable()
+   collection.printCollection()
    
 if __name__ == '__main__':
     main()
