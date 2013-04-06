@@ -12,11 +12,10 @@ class Document:
       self.url          = dictionary.get("Url", "").lower()
       self.source       = dictionary.get("Source", "").lower()
       self.description  = dictionary.get("Description", "").lower()
-      self.queryCode    = queryCode      
+      self.queryCode    = queryCode
       self.tfidfVector  = {}
       self.tfidfLength  = -1
       self.cluster      = False
-      self.tempCluster  = False
    
    def __hash__(self):
       return hash(self.title)
@@ -25,13 +24,15 @@ class Document:
       return (self.title, self.url, self.source, self.description) == (other.title, other.url, other.source, other.description)
    
    def getTFIDF(self, word):
+      """Get the tfidf value for 'word' in this document
+      """
       #TODO: Remove the calls to lower() for all methods in this class?
-      word = word.lower()
+      #word = word.lower()
       indexEntry = self.tfidfVector.get(word, Index.IndexEntry())
       return indexEntry.getTFIDF()
    
    def joinToIndex(self, word, indexEntry):
-      word = word.lower()
+      #word = word.lower()
       self.tfidfVector[word] = indexEntry
    
    def getBagOfWords(self):
@@ -46,7 +47,7 @@ class Document:
    def computeTFIDFLength(self):
       self.tfidfLength  = 0
       for word in self.tfidfVector:
-         tfidf = self.getTFIDF()
+         tfidf = self.getTFIDF(word)
          self.tfidfLength  += tfidf * tfidf
       self.tfidfLength  = math.sqrt(self.tfidfLength)
       return self.tfidfLength
@@ -76,6 +77,20 @@ class Document:
          distance      += diff * diff
       return math.sqrt(distance)
    
+   def normalDistanceTo(self, other):
+      bagOfWordsSelf    = set( self.tfidfVector.keys())
+      bagOfWordsOther   = set(other.tfidfVector.keys())
+      bagOfWords        = bagOfWordsSelf | bagOfWordsOther
+      distance          = 0
+      if self.tfidfLength < 0:
+         self.computeTFIDFLength()
+      if other.tfidfLength < 0:
+         other.computeTFIDFLength()
+      for word in bagOfWords:
+         diff           = (self.getTFIDF(word)/self.tfidfLength) - (other.getTFIDF(word)/other.tfidfLength)
+         distance      += diff * diff
+      return math.sqrt(distance)
+   
    def printDocument(self, keys = {'all': 1}):
       if keys.get("all", 0):
          print "Title = " + self.title
@@ -96,8 +111,9 @@ class Document:
             print "queryCode = " + self.queryCode
    
    def computeCentroidOf(self, setOfDocs):
-      if not setOfDocs:
-         print "Empty cluster found"
+      #TODO: Empty Clusters
+      #if not setOfDocs:
+         #print "Empty cluster found"
       numDocs = len(setOfDocs)
       #TODO: Take care of case when numDocs == 0
       setOfWords = set()

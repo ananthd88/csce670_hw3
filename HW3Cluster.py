@@ -13,8 +13,9 @@ class Cluster:
       self.centroid        = Document.Document({}, -1)
       self.majorityClass   = -1
       self.majorityCount   = 0
-      #self.centroid = dataPointConstructor({})
-      #self.centroid = dataPointConstructor(self.centroid, {})
+      self.rss             = 0.0
+      
+      #Mark centroid of this cluster as equivalent to the seed document
       newSet = set()
       newSet.add(seed)
       self.centroid.computeCentroidOf(newSet)
@@ -33,17 +34,16 @@ class Cluster:
    def add(self, member):
       if member in self.members:
          return False
-      old = member.cluster
-      if old:
-         oldDist = old.distanceTo(member)
-         old = old.id         
-      else:
-         old = -1
-         oldDist = sys.float_info.max
-      new = self.id
-      newDist = self.distanceTo(member)
-      #print "Doc:%d (%d) -> (%d)" % (member.id, old, new)
-      #print "Doc:" + str(member.id) + "("+ str(old) + ") -> (" + str(new) + ")"
+      #old = member.cluster
+      #if old:
+      #   oldDist = old.distanceTo(member)
+      #   old = old.id         
+      #else:
+      #   old = -1
+      #   oldDist = sys.float_info.max
+      #new = self.id
+      #newDist = self.distanceTo(member)
+      #print "Doc:%d (%d)(%f) -> (%d)(%f)" % (member.id, old, oldDist, new, newDist)
       self.members.add(member)
       if member.cluster and not member.cluster.remove(member):
          print "Inconsistency detected for member when adding to a cluster:"
@@ -57,9 +57,11 @@ class Cluster:
       self.members.remove(member)
       member.cluster = False
       return True
-      
+   
    def distanceTo(self, dataPoint):
-      return self.centroid.distanceTo(dataPoint)
+      #return self.centroid.distanceTo(dataPoint)
+      #return self.centroid.cosineSimilarity(dataPoint)
+      return self.centroid.normalDistanceTo(dataPoint)
    
    def computeMajorityClass(self):
       classes = {}
@@ -72,3 +74,11 @@ class Cluster:
          if count > self.majorityCount:
             self.majorityCount = count
             self.majorityClass = entry
+   
+   def computeRSS(self):
+      oldrss = self.rss
+      self.rss = 0.0
+      for member in self.members:
+         distance = self.distanceTo(member)
+         self.rss += distance * distance
+      return self.rss < oldrss
