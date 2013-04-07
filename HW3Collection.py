@@ -71,15 +71,15 @@ class Collection:
          self.categories.append(Category(count))
          self.categoryNames.append(category)
          count += 1
-      
-   def addDocument(self, document):
+   
+   def addDocument(self, document, clustering = True, classifying = True):
       if self.hashTable.get(document, 0):
          print "Duplicate document found, rejecting it."
          return 0
       else:
          self.hashTable[document] = 1
          self.documents.append(document)
-         self.index.processDocument(document.getCategory(), document)
+         self.index.processDocument(document.getCategory(), document, clustering, classifying)
          return 1
    
    def printCollection(self):
@@ -155,7 +155,7 @@ class Collection:
       print "Purity for the clustering = %f" % (self.purity)
       print "RSS for clustering = %lf" % (self.rss)
    
-   def processAPIQueries(self, queryCode, categoryCode, numResults):
+   def processAPIQueries(self, queryCode, categoryCode, numResults, clustering = True, classifying = True):
       query    = self.getQuery(queryCode)
       subqueries = re.split('\W+', query)
       if categoryCode >= 0:
@@ -210,7 +210,7 @@ class Collection:
          data = json.loads(line)
          for jsonDocument in data["d"]["results"]:
             newDocument = Document.Document(jsonDocument, queryCode, self.getCategory(categoryCode))
-            success = self.addDocument(newDocument)
+            success = self.addDocument(newDocument, clustering, classifying)
             if success:
                uniqueCount += 1
                if uniqueCount == numResults:

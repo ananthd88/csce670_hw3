@@ -104,9 +104,10 @@ class TermEntry:
          if not self.isCategoryPresent(category):
             self.addCategory(category)
          self.incrementCategoryCount(category)
-      if not self.isDocumentPresent(document):
-         self.addDocument(document)
-      self.incrementDocumentCount(document)
+      if document:
+         if not self.isDocumentPresent(document):
+            self.addDocument(document)
+         self.incrementDocumentCount(document)
       self.incrementTotalCount()
       
 class Index:
@@ -135,13 +136,20 @@ class Index:
          return False
       return self.vocabulary[word].isCategoryPresent(category)
    
-   def processDocument(self, category, document):
+   def processDocument(self, category, document, clustering = True, classifying = True):
       bagOfWords = document.getBagOfWords()
       for word in bagOfWords:
          if not self.inVocabulary(word):
             self.vocabulary[word] = TermEntry()
-         self.vocabulary[word].forceIncrementAllCounts(category, document)
-      if category:
+         if clustering and classifying:
+            self.vocabulary[word].forceIncrementAllCounts(category, document)
+         elif clustering:
+            self.vocabulary[word].forceIncrementAllCounts(False, document)
+         elif classifying:
+            self.vocabulary[word].forceIncrementAllCounts(category, False)
+         else:
+            self.incrementTotalCount()
+      if classifying:
          category.incrementCount()
          category.incrementTokensBy(len(bagOfWords))
 

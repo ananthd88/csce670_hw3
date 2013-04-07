@@ -12,7 +12,7 @@ def main():
    collection.addQueries(queries)
    numQueries = len(queries)
    for queryCode in range(numQueries):
-      numRequestsMade = collection.processAPIQueries(queryCode, -1, 30)
+      numRequestsMade = collection.processAPIQueries(queryCode, -1, 30, True, False)
       print str(numRequestsMade) + " requests to the Bing API were made."
       collection.hashTable = {}
    collection.computeAllTFIDF()
@@ -36,17 +36,5 @@ def main():
       print "\nBest %d-clustering purity = %f" % (k, metric["purity"])
       print "Best %d-clustering RSS = %f" % (k, metric["rss"])
       k += 1
-   
-   numCategories = len(categories)
-   for queryCode in range(numQueries):
-      for categoryCode in range(numCategories):
-         numRequestsMade = processAPIQueries(collection, queryCode, categoryCode, 30)
-         if numRequestsMade:
-            print str(numRequestsMade) + " requests to the Bing API were made."
-         #TODO: Should this be moved outside the outer for loop ?
-         #      To avoid all duplicates, and not just within (query,category) groups
-         collection.hashTable = {}
-
-   collection.printCollection()
 if __name__ == '__main__':
     main()
