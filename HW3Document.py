@@ -4,18 +4,18 @@ import math
 
 class Document:
    numOfDocsCreated = 0
-   def __init__(self, dictionary, queryCode):
+   def __init__(self, dictionary = {}, queryCode = False, category = False):
       Document.numOfDocsCreated += 1
       self.id           = Document.numOfDocsCreated
-      
       self.title        = dictionary.get("Title", "").lower()
       self.url          = dictionary.get("Url", "").lower()
       self.source       = dictionary.get("Source", "").lower()
       self.description  = dictionary.get("Description", "").lower()
       self.queryCode    = queryCode
       self.tfidfVector  = {}
-      self.tfidfLength  = -1
+      self.tfidfLength  = -1.0
       self.cluster      = False
+      self.category     = category
    
    def __hash__(self):
       return hash(self.title)
@@ -24,16 +24,21 @@ class Document:
       return (self.title, self.url, self.source, self.description) == (other.title, other.url, other.source, other.description)
    
    def getTFIDF(self, word):
-      """Get the tfidf value for 'word' in this document
-      """
-      #TODO: Remove the calls to lower() for all methods in this class?
-      #word = word.lower()
-      indexEntry = self.tfidfVector.get(word, Index.IndexEntry())
-      return indexEntry.getTFIDF()
-   
-   def joinToIndex(self, word, indexEntry):
-      #word = word.lower()
-      self.tfidfVector[word] = indexEntry
+      documentEntry = self.tfidfVector.get(word, 0)
+      if documentEntry:
+         return documentEntry.getTFIDF()
+      else:
+         return 0.0
+   def getQueryCode(self):
+      return self.queryCode
+   def getCategory(self):
+      return self.category
+   #TODO: Might not be used
+   def setCategory(self, category):
+      self.category = category
+      
+   def joinToIndex(self, word, documentEntry):
+      self.tfidfVector[word] = documentEntry
    
    def getBagOfWords(self):
       array1 = re.split('[^a-zA-Z0-9_@]', self.title)
@@ -42,10 +47,11 @@ class Document:
       return bagOfWords
    
    def getSetOfWords(self):
+      #TODO: Performance! This is called several times for recomputation of centroids
       return set(self.tfidfVector.keys())
       
    def computeTFIDFLength(self):
-      self.tfidfLength  = 0
+      self.tfidfLength  = 0.0
       for word in self.tfidfVector:
          tfidf = self.getTFIDF(word)
          self.tfidfLength  += tfidf * tfidf
@@ -53,41 +59,33 @@ class Document:
       return self.tfidfLength
    
    def getTFIDFLength(self):
-      if self.tfidfLength < 0:
+      if self.tfidfLength < 0.0:
          return self.computeTFIDFLength()
       return self.tfidfLength
       
    def tfidfDotProduct(self, other):
-      dotProduct        = 0
+      dotProduct        = 0.0
       for word in self.tfidfVector:
          dotProduct    += self.getTFIDF(word) * other.getTFIDF(word)
       return dotProduct
       
    def cosineSimilarity(self, other):
       dotProduct        = self.tfidfDotProduct(other)
-      return dotProduct/(self.getTFIDFLength() * other.getTFIDFLength())      
+      return dotProduct/(self.getTFIDFLength() * other.getTFIDFLength())
    
    def distanceTo(self, other):
-      bagOfWordsSelf    = set( self.tfidfVector.keys())
-      bagOfWordsOther   = set(other.tfidfVector.keys())
-      bagOfWords        = bagOfWordsSelf | bagOfWordsOther
-      distance          = 0
-      for word in bagOfWords:
+      setOfWords        = self.getSetOfWords() | other.getSetOfWords()
+      distance          = 0.0
+      for word in setOfWords:
          diff           = self.getTFIDF(word) - other.getTFIDF(word)
          distance      += diff * diff
       return math.sqrt(distance)
    
    def normalDistanceTo(self, other):
-      bagOfWordsSelf    = set( self.tfidfVector.keys())
-      bagOfWordsOther   = set(other.tfidfVector.keys())
-      bagOfWords        = bagOfWordsSelf | bagOfWordsOther
-      distance          = 0
-      if self.tfidfLength < 0:
-         self.computeTFIDFLength()
-      if other.tfidfLength < 0:
-         other.computeTFIDFLength()
-      for word in bagOfWords:
-         diff           = (self.getTFIDF(word)/self.tfidfLength) - (other.getTFIDF(word)/other.tfidfLength)
+      setOfWords        = self.getSetOfWords() | other.getSetOfWords()
+      distance          = 0.0
+      for word in setOfWords:
+         diff           = (self.getTFIDF(word)/self.getTFIDFLength()) - (other.getTFIDF(word)/other.getTFIDFLength())
          distance      += diff * diff
       return math.sqrt(distance)
    
@@ -115,15 +113,16 @@ class Document:
       #if not setOfDocs:
          #print "Empty cluster found"
       numDocs = len(setOfDocs)
-      #TODO: Take care of case when numDocs == 0
       setOfWords = set()
       for doc in setOfDocs:
          setOfWords |= doc.getSetOfWords()
       self.tfidfVector = {}
       for word in setOfWords:
-         indexEntry = Index.IndexEntry()
-         indexEntry.tfidf = 0.0
+         tfidf = 0.0
          for doc in setOfDocs:
-            indexEntry.tfidf += doc.getTFIDF(word)
-         indexEntry.tfidf /= float(numDocs)
-         self.tfidfVector[word] = indexEntry
+            tfidf += doc.getTFIDF(word)            
+         if numDocs:
+            tfidf /= float(numDocs)
+         documentEntry = Index.DocumentEntry()
+         documentEntry.setTFIDF(tfidf)
+         self.tfidfVector[word] = documentEntry

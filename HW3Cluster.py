@@ -8,13 +8,11 @@ class Cluster:
    def __init__(self, seed):
       Cluster.numOfClustersCreated += 1
       self.id              = Cluster.numOfClustersCreated
-      
       self.members         = set()
-      self.centroid        = Document.Document({}, -1)
+      self.centroid        = Document.Document()
       self.majorityClass   = -1
       self.majorityCount   = 0
       self.rss             = 0.0
-      
       #Mark centroid of this cluster as equivalent to the seed document
       newSet = set()
       newSet.add(seed)
@@ -59,6 +57,7 @@ class Cluster:
       return True
    
    def distanceTo(self, dataPoint):
+      # Metric used to calculate "distance" from the centroid of the cluster to a document
       #return self.centroid.distanceTo(dataPoint)
       #return self.centroid.cosineSimilarity(dataPoint)
       return self.centroid.normalDistanceTo(dataPoint)
@@ -66,14 +65,15 @@ class Cluster:
    def computeMajorityClass(self):
       classes = {}
       for member in self.members:
-         count = classes.get(member.queryCode, 0)
+         queryCode = member.getQueryCode()
+         count = classes.get(queryCode, 0)
          if not count:
-            classes[member.queryCode] = 0
-         classes[member.queryCode] += 1
+            classes[queryCode] = 0
+         classes[queryCode] += 1
       for (entry, count) in classes.items():
          if count > self.majorityCount:
-            self.majorityCount = count
             self.majorityClass = entry
+            self.majorityCount = count            
    
    def computeRSS(self):
       oldrss = self.rss
