@@ -36,7 +36,14 @@ class Document:
    #TODO: Might not be used
    def setCategory(self, category):
       self.category = category
-      
+   def getPredictedCategory(self):
+      return self.predictedCategory
+   def setPredictedCategory(self, category):
+      self.predictedCategory = category
+   def getTitle(self):
+      return self.title
+   def getDescription(self):
+      return self.description
    def joinToIndex(self, word, documentEntry):
       self.tfidfVector[word] = documentEntry
    

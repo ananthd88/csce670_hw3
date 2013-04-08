@@ -14,11 +14,44 @@ class Category:
       self.code = code
       self.numMembers = 0
       self.totalTokens = 0
+      self.FN = 0
+      self.FP = 0
+      self.TN = 0
+      self.TP = 0
    def __hash__(self):
       return hash(self.code)
    def __eq__(self, other):
-      return (self.code, len(self.members), len(self.terms)) == (other.code, len(other.members), len(other.terms))
+      return self.code == other.code
    
+   def incrementFN(self):
+      self.FN += 1
+   def incrementFP(self):
+      self.FP += 1
+   def incrementTP(self):
+      self.TP += 1
+   def getFN(self):
+      return self.FN
+   def getFP(self):
+      return self.FP
+   def getTN(self):
+      return self.TN
+   def getTP(self):
+      return self.TP
+   def computeTN(self, total):
+      self.TN = total - self.TP - self.FP - self.FN
+   def resetMetrics(self):
+      self.TP = 0
+      self.FP = 0
+      self.FN = 0
+      self.TN = 0
+   def printConfusionMatrix(self, name):
+      print "Confusion matrix for category %s" % (name)
+      print "TP = %d" % (self.TP)
+      print "FP = %d" % (self.FP)
+      print "FN = %d" % (self.FN)
+      print "TN = %d" % (self.TN)
+   def getCode(self):
+      return self.code
    def getCount(self):
       return self.numMembers
    def incrementCount(self):
@@ -38,15 +71,32 @@ class Collection:
       self.clusters  = False
       self.purity    = 0.0
       self.rss       = 0.0
+      self.maPrecision = 0.0
+      self.maRecall = 0.0
       self.queries   = []
       self.categories   = []
       self.categoryNames = []
+      self.classification = []
       
    def getQuery(self, queryCode):
       if queryCode >= len(self.queries):
          return False
       return self.queries[queryCode]
-   
+   def getMAF1(self):
+      print "Precision = %f" % (self.maPrecision)
+      print "Recall = %f" % (self.maRecall)
+      if self.maPrecision == 0.0 and self.maRecall == 0.0:
+         return 0.0
+      return 2.0*self.maRecall*self.maPrecision/(self.maRecall + self.maPrecision)
+   def getNumDocuments(self):
+      return len(self.documents)
+   def getDocuments(self):
+      return self.documents
+   def getCategories(self):
+      return self.categories
+      
+   def getSizeOfVocabulary(self):
+      return self.index.getSizeOfVocabulary()
    def getNumQueries(self):
       return len(self.queries)
    
@@ -59,6 +109,11 @@ class Collection:
       if categoryCode >= len(self.categories):
          return False
       return self.categoryNames[categoryCode]
+   
+   def getCategoryTotalTokenCount(self, category):
+      return category.getTotalTokens()
+   def getCategoryMemberCount(self, category):
+      return category.getCount()
       
    def addQueries(self, queries):
       for query in queries:
@@ -82,6 +137,11 @@ class Collection:
          self.index.processDocument(document.getCategory(), document, clustering, classifying)
          return 1
    
+   def getNumTokensInCategory(self, word, category):
+      return self.index.getCategoryCount(word, category)
+   def getNumTokensInDocument(self, word, document):
+      return self.index.getDocumentCount(word, document)
+      
    def printCollection(self):
       for document in self.documents:
          print self.queries[document.queryCode] + " -> " + document.title
@@ -185,7 +245,7 @@ class Collection:
          else:         
             queryString = "Query=%27" + "_".join(subqueries) + "%27"
             formatString = "&$format=json"
-            if category >= 0:
+            if categoryCode >= 0:
                categoryString = "&NewsCategory=%27rt_" + category + "%27"
             else:
                categoryString = ""
@@ -223,3 +283,64 @@ class Collection:
             filehandle.close()
          skip += 15
       return numRequestsMade
+   def naiveBayesClassifier(self, test):
+      print "Starting naive bayes classifier"
+      train = self
+      test.classification = []
+      numTrainDocs = float(len(train.documents))
+      sizeTrainVocabulary = train.getSizeOfVocabulary()
+      for document in test.documents:
+         maxLogProbability = None #0.0
+         predictedCategory = False
+         for category in train.categories:
+            logProbability  = 0.0
+            logProbability += math.log(float(category.getCount()), 2) - math.log(numTrainDocs, 2)
+            bagOfWords = document.getBagOfWords()
+            for word in bagOfWords:
+               #TODO: Encapsulation 
+               logProbability += math.log(float(train.getNumTokensInCategory(word, category)) + 1.0, 2)
+            logProbability -= float(len(bagOfWords)) * math.log(float((category.getTotalTokens() + sizeTrainVocabulary)), 2)
+            if maxLogProbability < logProbability:
+               maxLogProbability = logProbability
+               predictedCategory = category
+            # If the log of probabilities for two classes are equal
+            elif maxLogProbability == logProbability:
+               # Select the class which has more documents assigned to it
+               # which would imply a greater value for P(c), 
+               # since P(c) = (Num of docs classified as c)/(Num of docs in collection)
+               if predictedCategory.getCount() < category.getCount():
+                  predictedCategory = category
+         document.setPredictedCategory(predictedCategory)
+         realCategory = document.getCategory()
+         if realCategory == predictedCategory:
+            realCategory.incrementTP()
+         else:
+            realCategory.incrementFN()
+            test.categories[predictedCategory.getCode()].incrementFP()
+            #predictedCategory.incrementFP()
+            
+      # Print out the documents prefixed with their assigned category
+      #for document in test.documents:
+      #   print "%s: (%s) (%s) (%s)" % (train.getCategoryName(document.getPredictedCategory().getCode()), test.getQuery(document.getQueryCode()), document.getTitle(), document.getDescription())
+      
+      sumTP = 0
+      sumFP = 0
+      sumFN = 0
+      for category in test.getCategories():
+         category.computeTN(test.getNumDocuments())
+         category.printConfusionMatrix(test.getCategoryName(category.getCode()))
+         sumTP += category.getTP()
+         sumFP += category.getFP()
+         sumFN += category.getFN()
+         # Important to clear the metrics once you are done calculating
+         category.resetMetrics()
+      print "Sum(TP) = %d" %(sumTP)
+      print "Sum(FP) = %d" %(sumFP)
+      print "Sum(FN) = %d" %(sumFN)
+      print "Total documents in test set = %d" % (test.getNumDocuments())
+      test.maPrecision = float(sumTP)/float(sumTP + sumFP)
+      test.maRecall = float(sumTP)/float(sumTP + sumFP)
+      maf1 = test.getMAF1()
+      print "Microaveraged F1 for test set = %f" % (maf1)
+      print "Finished nayve bayes classification"
+      return maf1

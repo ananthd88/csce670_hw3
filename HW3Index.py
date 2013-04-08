@@ -38,9 +38,9 @@ class TermEntry:
       self.totalCount += 1
          
    def isCategoryPresent(self, category):
-      return self.categoryList.get(category, False) == True
+      return category in self.categoryList.keys()
    def isDocumentPresent(self, document):
-      return self.documentList.get(document, False) == True
+      return document in self.documentList.keys()
       
    def addCategory(self, category):
       categoryEntry = self.categoryList.get(category, 0)
@@ -116,6 +116,8 @@ class Index:
    
    def getVocabulary(self):
       return self.vocabulary
+   def getSizeOfVocabulary(self):
+      return len(self.vocabulary)
    def inVocabulary(self, word):
       return word in self.vocabulary
    def getDocumentList(self, word):
@@ -148,7 +150,7 @@ class Index:
          elif classifying:
             self.vocabulary[word].forceIncrementAllCounts(category, False)
          else:
-            self.incrementTotalCount()
+            self.vocabulary[word].incrementTotalCount()
       if classifying:
          category.incrementCount()
          category.incrementTokensBy(len(bagOfWords))
@@ -157,15 +159,6 @@ class Index:
       return len(self.getDocumentList(word))
    def numCategoriesContaining(self, word):
       return len(self.getCategoryList(word))
-      
-   def isWordInDocument(self, word, document):
-      if not inVocabulary(word):
-         return False
-      return self.vocabulary[word].isDocumentPresent(document)
-   def isWordInCategory(self, word, category):
-      if not inVocabulary(word):
-         return False
-      return self.vocabulary[word].isCategoryPresent(category)
       
    def getDocumentCount(self, word, document):
       if not self.isInDocument(word, document):
