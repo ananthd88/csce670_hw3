@@ -16,25 +16,22 @@ def main():
       print str(numRequestsMade) + " requests to the Bing API were made."
       collection.hashTable = {}
    collection.computeAllTFIDF()
-   print
-   print
-   metricArray = []
-   for k in range(2, 16):
-      bestPurity = 0.0
-      bestRSS = 0.0
-      for i in range(0, 10):
-         collection.kMeansCluster(k)
-         if bestPurity < collection.purity:
-            bestPurity = collection.purity
-         if bestRSS < collection.rss:
-            bestRSS = collection.rss
-      metric = {"purity": bestPurity, "rss": bestRSS}
-      metricArray.append(metric)
    
-   k = 2
-   for metric in metricArray:
-      print "\nBest %d-clustering purity = %f" % (k, metric["purity"])
-      print "Best %d-clustering RSS = %f" % (k, metric["rss"])
-      k += 1
+   k = 15
+   distanceMetric = 1
+   clustering1 = collection.kMeansCluster(k, distanceMetric)   
+   #print "Running k-means clustering algorithm with k = %d" % (k)
+   #print "Distance metric being used is %s" % (distanceMetricNames[distanceMetric])
+   #clustering2 = collection.kMeansCluster(k, distanceMetric)   
+   #count = 0
+   #matches = 0
+   #mismatches = 0
+   #for count in range(collection.getNumDocuments()):
+   #   if clustering1[count] == clustering2[count]:
+   #      matches += 1
+   #   else:
+   #      mismatches += 1
+   #print "RI = %f" % (float(matches/(matches + mismatches))
+   
 if __name__ == '__main__':
     main()

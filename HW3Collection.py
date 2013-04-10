@@ -9,20 +9,25 @@ import os.path
 import requests
 import json
 
-class Category:
+class Category:      # Class that abstracts a category of documents
    def __init__(self, code):
       self.code = code
       self.numMembers = 0
+      self.members = []
       self.totalTokens = 0
       self.FN = 0
       self.FP = 0
       self.TN = 0
       self.TP = 0
+      self.setOfWords = set()
+      self.numOfImportantTokens = 0
+      
    def __hash__(self):
       return hash(self.code)
    def __eq__(self, other):
       return self.code == other.code
    
+   # Basic methods for the classification quality metrics
    def incrementFN(self):
       self.FN += 1
    def incrementFP(self):
@@ -50,17 +55,30 @@ class Category:
       print "FP = %d" % (self.FP)
       print "FN = %d" % (self.FN)
       print "TN = %d" % (self.TN)
+   
    def getCode(self):
       return self.code
-   def getCount(self):
-      return self.numMembers
-   def incrementCount(self):
-      self.numMembers += 1
+   #def incrementCount(self):
+   #   self.numMembers += 1
+   def getNumDocs(self):
+      return len(self.members)
    def getTotalTokens(self):
       return self.totalTokens
    def incrementTokensBy(self, count):
       self.totalTokens += count
-      
+   def addWord(self, word):
+      self.setOfWords.add(word)
+   def getSetOfWords(self):
+      return self.setOfWords
+   def getNumOfImportantTokens(self):
+      return self.numOfImportantTokens
+   def setNumOfImportantTokens(self, count):
+      self.numOfImportantTokens = count
+   def addDocument(self, document):
+      #TODO: Call to incrementCount()
+      self.members.append(document)
+   def getMembers(self):
+      return self.members
       
 class Collection:
    def __init__(self):
@@ -77,7 +95,18 @@ class Collection:
       self.categories   = []
       self.categoryNames = []
       self.classification = []
+      self.useAllWords = True
+      self.importantWords = {}
+      self.setOfImportantWords = set()
+      self.includeAll = False    
       
+   def computeAllMI(self):
+      print "Calculating MI of every term for each category..."
+      self.index.initializeAllMI(len(self.categories))
+      vocabulary = self.index.getVocabulary()
+      for word in vocabulary:         
+         for category in self.categories:
+            self.index.computeMI(word, category)
    def getQuery(self, queryCode):
       if queryCode >= len(self.queries):
          return False
@@ -94,6 +123,22 @@ class Collection:
       return self.documents
    def getCategories(self):
       return self.categories
+   def getSetOfImportantWords(self):
+      return self.setOfImportantWords
+   def getIncludeAll(self):
+      return self.includeAll
+   def setIncludeAll(self, includeAll):
+      self.includeAll = includeAll
+   def getWeightOfWord(self, word):
+      if self.importantWords.get(word, 0) == 0:
+         return 0.0001
+      return self.importantWords.get(word, 2.0)
+   def setWeightOfWord(self, word, weight):
+      self.importantWords[word] = weight
+      self.setOfImportantWords.add(word)
+   def resetImportantWords(self):
+      self.importantWords = {}
+      self.setOfImportantWords = set()
       
    def getSizeOfVocabulary(self):
       return self.index.getSizeOfVocabulary()
@@ -113,7 +158,7 @@ class Collection:
    def getCategoryTotalTokenCount(self, category):
       return category.getTotalTokens()
    def getCategoryMemberCount(self, category):
-      return category.getCount()
+      return category.getNumDocs()
       
    def addQueries(self, queries):
       for query in queries:
@@ -129,12 +174,12 @@ class Collection:
    
    def addDocument(self, document, clustering = True, classifying = True):
       if self.hashTable.get(document, 0):
-         print "Duplicate document found, rejecting it."
+         #print "Duplicate document found, rejecting it."
          return 0
       else:
          self.hashTable[document] = 1
          self.documents.append(document)
-         self.index.processDocument(document.getCategory(), document, clustering, classifying)
+         self.index.processDocument(document.getCategory(), document, clustering, classifying, self.includeAll)
          return 1
    
    def getNumTokensInCategory(self, word, category):
@@ -155,35 +200,38 @@ class Collection:
          documentList = self.index.getDocumentList(word)
          df = len(documentList)
          logdf = logNumDocs - math.log(float(df), 2)
-         for (document, documentEntry) in documentList.items():
+         for (docID, documentEntry) in documentList.items():
             tf = documentEntry.getCount()
             logtf = 1.0 + math.log(float(tf), 2)
             tfidf = logtf * logdf
             documentEntry.setTFIDF(tfidf)
-            document.joinToIndex(word, documentEntry)
-            #print "(%s) - (%f)" % (document.id, tfidf)
-
-   def kMeansCluster(self, k):
+            documentEntry.getDocument().joinToIndex(word, documentEntry)
+   
+   def kMeansCluster(self, k, distanceMetric):
+      distanceMetricNames = ["Cosine Similarity",
+                             "Euclidean distance using normalized TFIDF vectors",
+                             "Simple Euclidean distance"]
+      print "Running k-means clustering algorithm with k = %d" % (k)
+      print "Distance metric being used is %s" % (distanceMetricNames[distanceMetric])
+      Cluster.Cluster.numOfClustersCreated = 0
       # Initialization with seeds
       seeds = random.sample(self.documents, k)
       self.clusters = []
       for seed in seeds:
-         self.clusters.append(Cluster.Cluster(seed))
-      
+         self.clusters.append(Cluster.Cluster(seed, distanceMetric))
       # Reset the cluster fields populated from any previous runs
       for document in self.documents:
          document.cluster = False
       
       change = True
       iterations = 0
-      # Assign to clusters and recompute centroids
-      #while(change and iterations < 4):
-      while(change):
+      while(change and iterations < 4):
+         print "Iteration %d" % (iterations)
          change = False
          # Assign each document to 'nearest' cluster
          for document in self.documents:
             if document.cluster:
-               minDistance = document.cluster.distanceTo(document)
+               minDistance = cluster.distanceTo(document)
             else:
                minDistance = sys.float_info.max
             for cluster in self.clusters:
@@ -194,27 +242,24 @@ class Collection:
                   if success:
                      change = True
          for cluster in self.clusters:
-            #print cluster
             cluster.recomputeCentroid()
             
-         iterations += 1
-         #print "Completed iteration %d" % (iterations)
-         #print "RSS = %f" % (rssCounts)
-         #raw_input("Press any key...")
+         iterations += 1         
       purityCounts = 0.0
       rssCounts = 0.0
       for cluster in self.clusters:
          cluster.computeMajorityClass()
          purityCounts += cluster.majorityCount
          cluster.computeRSS()
-         rssCounts += cluster.rss
+         rssCounts += cluster.rss         
+         print cluster
       self.purity = float(purityCounts)/float(len(self.documents))
       self.rss = rssCounts
       print
       print "Finished %d-clustering in %d iterations" % (k, iterations)
       print "Purity for the clustering = %f" % (self.purity)
       print "RSS for clustering = %lf" % (self.rss)
-   
+      
    def processAPIQueries(self, queryCode, categoryCode, numResults, clustering = True, classifying = True):
       query    = self.getQuery(queryCode)
       subqueries = re.split('\W+', query)
@@ -231,7 +276,7 @@ class Collection:
             filename += category + "_"
          filename += str(skip) + ".json"
          if os.path.exists(filename):
-            print "Reading results from json file %s" % (filename)
+            #print "Reading results from json file %s" % (filename)
             try:
                filehandle = open(filename, "r")
                line = filehandle.read().decode('utf8')
@@ -269,7 +314,7 @@ class Collection:
                line = r.text
          data = json.loads(line)
          for jsonDocument in data["d"]["results"]:
-            newDocument = Document.Document(jsonDocument, queryCode, self.getCategory(categoryCode))
+            newDocument = Document.Document(jsonDocument, queryCode, query, self.getCategory(categoryCode))
             success = self.addDocument(newDocument, clustering, classifying)
             if success:
                uniqueCount += 1
@@ -283,23 +328,33 @@ class Collection:
             filehandle.close()
          skip += 15
       return numRequestsMade
-   def naiveBayesClassifier(self, test):
-      print "Starting naive bayes classifier"
+   
+   def naiveBayesClassifierNew_v2(self, test):
+      print "Starting new naive bayes classifier v2"
       train = self
       test.classification = []
-      numTrainDocs = float(len(train.documents))
+      numTrainDocs = float(train.getNumDocuments())
       sizeTrainVocabulary = train.getSizeOfVocabulary()
+      thresholdMI = 0.0001
       for document in test.documents:
-         maxLogProbability = None #0.0
+         maxLogProbability = None
          predictedCategory = False
          for category in train.categories:
             logProbability  = 0.0
-            logProbability += math.log(float(category.getCount()), 2) - math.log(numTrainDocs, 2)
+            # P(c) = (No. of docs in c)/(No. of training docs)
+            logProbability += math.log(float(category.getNumDocs()), 2) - math.log(numTrainDocs, 2)
             bagOfWords = document.getBagOfWords()
+            numIgnored = 0
             for word in bagOfWords:
-               #TODO: Encapsulation 
-               logProbability += math.log(float(train.getNumTokensInCategory(word, category)) + 1.0, 2)
-            logProbability -= float(len(bagOfWords)) * math.log(float((category.getTotalTokens() + sizeTrainVocabulary)), 2)
+               if len(word):
+                  mi = train.index.getMI(word, category)
+                  if mi > thresholdMI:
+                     logProbability += math.log(float(train.getNumTokensInCategory(word, category)) + 1.0, 2) + 200.0*math.log(mi + 1.0, 2)
+                  else:
+                     numIgnored += 1
+               else:
+                  numIgnored += 1
+            logProbability -= float(len(bagOfWords) - numIgnored) * math.log(float((category.getTotalTokens() + sizeTrainVocabulary)), 2)
             if maxLogProbability < logProbability:
                maxLogProbability = logProbability
                predictedCategory = category
@@ -308,20 +363,22 @@ class Collection:
                # Select the class which has more documents assigned to it
                # which would imply a greater value for P(c), 
                # since P(c) = (Num of docs classified as c)/(Num of docs in collection)
-               if predictedCategory.getCount() < category.getCount():
+               if predictedCategory.getNumDocs() < category.getNumDocs():
                   predictedCategory = category
+         predictedCategory = test.getCategory(predictedCategory.getCode())
          document.setPredictedCategory(predictedCategory)
          realCategory = document.getCategory()
          if realCategory == predictedCategory:
             realCategory.incrementTP()
          else:
             realCategory.incrementFN()
-            test.categories[predictedCategory.getCode()].incrementFP()
-            #predictedCategory.incrementFP()
+            predictedCategory.incrementFP()
             
       # Print out the documents prefixed with their assigned category
-      #for document in test.documents:
-      #   print "%s: (%s) (%s) (%s)" % (train.getCategoryName(document.getPredictedCategory().getCode()), test.getQuery(document.getQueryCode()), document.getTitle(), document.getDescription())
+      for predictedCategory in test.categories:
+         print "Predicted Category: %s\nNo. of docs: %d\n" % (test.getCategoryName(predictedCategory.getCode()), predictedCategory.getNumDocs())
+         for document in predictedCategory.getMembers():
+            print "\t(%s) : %s" % (test.getCategoryName(document.getCategory().getCode()), document.getTitle())
       
       sumTP = 0
       sumFP = 0
@@ -339,8 +396,73 @@ class Collection:
       print "Sum(FN) = %d" %(sumFN)
       print "Total documents in test set = %d" % (test.getNumDocuments())
       test.maPrecision = float(sumTP)/float(sumTP + sumFP)
-      test.maRecall = float(sumTP)/float(sumTP + sumFP)
+      test.maRecall = float(sumTP)/float(sumTP + sumFN)
       maf1 = test.getMAF1()
       print "Microaveraged F1 for test set = %f" % (maf1)
-      print "Finished nayve bayes classification"
+      print "Finished naive bayes classification"
+      return maf1
+      
+   def naiveBayesClassifier(self, test):
+      print "Starting naive bayes classifier"
+      train = self
+      numTrainDocs = float(train.getNumDocuments())
+      sizeTrainVocabulary = train.getSizeOfVocabulary()
+      for document in test.documents:
+         maxLogProbability = None
+         predictedCategory = False
+         for category in train.categories:
+            logProbability  = 0.0
+            # P(c) = (No. of docs in c)/(No. of training docs)
+            logProbability += math.log(float(category.getNumDocs()), 2) - math.log(numTrainDocs, 2) 
+            bagOfWords = document.getBagOfWords()
+            for word in bagOfWords:
+               if len(word):
+                  # Add one smoothing
+                  logProbability += math.log(float(train.getNumTokensInCategory(word, category)) + 1.0, 2)
+            logProbability -= float(len(bagOfWords)) * math.log(float((category.getTotalTokens() + sizeTrainVocabulary)), 2)
+            if maxLogProbability < logProbability:
+               maxLogProbability = logProbability
+               predictedCategory = category
+            # If the log of probabilities for two classes are equal
+            elif maxLogProbability == logProbability:
+               # Select the class which has more documents assigned to it
+               # which would imply a greater value for P(c), 
+               # since P(c) = (Num of docs classified as c)/(Num of docs in collection)
+               if predictedCategory.getNumDocs() < category.getNumDocs():
+                  predictedCategory = category
+         predictedCategory = test.getCategory(predictedCategory.getCode())
+         document.setPredictedCategory(predictedCategory)
+         realCategory = document.getCategory()
+         if realCategory == predictedCategory:
+            realCategory.incrementTP()
+         else:
+            realCategory.incrementFN()
+            predictedCategory.incrementFP()
+            
+      # Print out the documents prefixed with their assigned category
+      for predictedCategory in test.categories:
+         print "Predicted Category: %s\nNo. of docs: %d\n" % (test.getCategoryName(predictedCategory.getCode()), predictedCategory.getNumDocs())
+         for document in predictedCategory.getMembers():
+            print "\t(%s) : %s" % (test.getCategoryName(document.getCategory().getCode()), document.getTitle())
+      
+      sumTP = 0
+      sumFP = 0
+      sumFN = 0
+      for category in test.getCategories():
+         category.computeTN(test.getNumDocuments())
+         category.printConfusionMatrix(test.getCategoryName(category.getCode()))
+         sumTP += category.getTP()
+         sumFP += category.getFP()
+         sumFN += category.getFN()
+         # Important to clear the metrics once you are done calculating
+         category.resetMetrics()
+      print "Sum(TP) = %d" %(sumTP)
+      print "Sum(FP) = %d" %(sumFP)
+      print "Sum(FN) = %d" %(sumFN)
+      print "Total documents in test set = %d" % (test.getNumDocuments())
+      test.maPrecision = float(sumTP)/float(sumTP + sumFP)
+      test.maRecall = float(sumTP)/float(sumTP + sumFN)
+      maf1 = test.getMAF1()
+      print "Microaveraged F1 for test set = %f" % (maf1)
+      print "Finished naive bayes classification"
       return maf1
