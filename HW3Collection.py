@@ -335,7 +335,7 @@ class Collection:
       test.classification = []
       numTrainDocs = float(train.getNumDocuments())
       sizeTrainVocabulary = train.getSizeOfVocabulary()
-      thresholdMI = 0.0001
+      thresholdMI = 0.0
       for document in test.documents:
          maxLogProbability = None
          predictedCategory = False
@@ -348,8 +348,10 @@ class Collection:
             for word in bagOfWords:
                if len(word):
                   mi = train.index.getMI(word, category)
+                  x2 = train.index.getX2(word, category)
                   if mi > thresholdMI:
                      logProbability += math.log(float(train.getNumTokensInCategory(word, category)) + 1.0, 2) + 200.0*math.log(mi + 1.0, 2)
+                     #logProbability += 0.90*math.log(x2 + 1.0, 2)
                   else:
                      numIgnored += 1
                else:

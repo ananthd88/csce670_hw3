@@ -41,6 +41,8 @@ class TermEntry:                 # Index -> Dictionary of Terms -> TermEntry
       self.totalCount   = 0      # Count of total number of tokens of this term in all the documents in the collection
       self.miValues = []         # List of Mutual Information (MI) values for this term in each category
                                  # indexed by the category's code
+      self.x2Values = []         # List of X2 values for this term in each category
+                                 # indexed by the category's code
    
    # Methods operating on the documentList
    def getDocumentList(self):
@@ -118,9 +120,11 @@ class TermEntry:                 # Index -> Dictionary of Terms -> TermEntry
       else:
          return False
    
-   # Methods that operate on the MI values for this term
+   # Methods that operate on the MI & X2 values for this term
    def initializeMIValues(self, numCategories):
       self.miValues = [0.0] * numCategories
+   def initializeX2Values(self, numCategories):
+      self.x2Values = [0.0] * numCategories
    def getTotalCount(self):
       return self.totalCount
    def incrementTotalCount(self):
@@ -159,6 +163,7 @@ class Index:                     # Index for a collection
    def initializeAllMI(self, numCategories):
       for word in self.vocabulary:
          self.vocabulary[word].initializeMIValues(numCategories)
+         self.vocabulary[word].initializeX2Values(numCategories)
    def processDocument(self, category, document, clustering = True, classifying = True, includeAll = False):
       self.incrementNumDocs()
       bagOfWords = document.getBagOfWords(includeAll)
@@ -209,6 +214,10 @@ class Index:                     # Index for a collection
       if self.vocabulary.get(word, False):
          return self.vocabulary[word].miValues[category.getCode()]
       return 0.0
+   def getX2(self, word, category):
+      if self.vocabulary.get(word, False):
+         return self.vocabulary[word].x2Values[category.getCode()]
+      return 0.0
    def computeMI(self, word, category):
       N  = float(self.getNumDocs())
       T  = float(self.vocabulary[word].getNumDocs())
@@ -234,8 +243,17 @@ class Index:                     # Index for a collection
       mi += (N10/NXX)*math.log((NXX*N10)/(N1X*NX0)) 
       mi += (N00/NXX)*math.log((NXX*N00)/(N0X*NX0))
       
+      x2 = (N00 + N01 + N10 + N11)
+      x2 *= (N11*N00 - N10*N10)
+      x2 *= (N11*N00 - N10*N10)
+      x2 /= (N11 + N01)
+      x2 /= (N11 + N10)
+      x2 /= (N10 + N00)
+      x2 /= (N01 + N00)
       self.vocabulary[word].miValues[category.getCode()] = mi
-   
+      self.vocabulary[word].x2Values[category.getCode()] = x2
+      
+      
    # Wrappers to operate on data in Index -> TermEntry -> DocumentEntry
    def getDocumentCount(self, word, document):
       if not self.isInDocument(word, document):
